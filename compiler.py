@@ -9,7 +9,7 @@ def compile_to_fault_tolerant(circuit: QuantumCircuit, opt_level: int = 2) -> Qu
     
     compiled_circuit = transpile(
         circuit, 
-        basis_gates=ft_basis, 
+        basis_gates=ft_basis,
         optimization_level=opt_level
     )
     
