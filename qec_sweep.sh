@@ -13,7 +13,7 @@ echo "Date: $(date)"
 source ~/qec-env/bin/activate
 
 # Execute the heavy Python sweep
-python threshold_sweep.py
+python threshold_sweep.py --distances 3 5 7 --shots 50000 --output-prefix bluepebble_run
 
 echo "Sweep completed."
 echo "Date: $(date)"
