@@ -16,7 +16,7 @@ class HybridQuantumEmbedding(nn.Module):
         self.fc_out = nn.Linear(num_qubits, classical_dim)
 
     def _build_quantum_layer(self, num_qubits):
-        # 1. Use the modern Qiskit 2.x functional API
+        # Use the modern Qiskit 2.x functional API
         feature_map = zz_feature_map(num_qubits, reps=1)
         ansatz = real_amplitudes(num_qubits, reps=1)
         
@@ -24,7 +24,7 @@ class HybridQuantumEmbedding(nn.Module):
         qc.compose(feature_map, inplace=True)
         qc.compose(ansatz, inplace=True)
         
-        # 2. Define an observable for each individual qubit (Z0, Z1, Z2, Z3)
+        # Define an observable for each individual qubit (Z0, Z1, Z2, Z3)
         observables = [
             SparsePauliOp.from_sparse_list([("Z", [i], 1)], num_qubits=num_qubits) 
             for i in range(num_qubits)
