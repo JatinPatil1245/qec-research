@@ -79,7 +79,6 @@ def main():
             row.append(f"{p_logical:.4f}±{std_err:.4f}")
         print(" | ".join(row))
 
-    # Save numerical data
     raw_data = {
         "physical_noise_rates": physical_noise_rates,
         "distances": distances,
