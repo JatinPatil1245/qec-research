@@ -1,22 +1,20 @@
 # dataset.py
 import torch
 
-def generate_toy_data(vocab_size=50, seq_length=4, num_samples=100):
+def generate_2d_data(num_samples=100):
     """
-    Generates synthetic sequences. 
-    The logic rule: If the sum of the tokens in the sequence is greater 
-    than half the max possible sum, the target class is 1. Otherwise, 0.
+    Generates random (x, y) coordinates between -1 and 1.
+    Target = 1 if the point is inside a circle of radius 0.7.
     """
-    # Generate random token sequences
-    X = torch.randint(0, vocab_size, (num_samples, seq_length))
+    X = torch.rand((num_samples, 2)) * 2 - 1 
     
-    # Apply the logical rule to create targets
-    threshold = (vocab_size * seq_length) / 2
-    y = (X.sum(dim=1) > threshold).long()
+    # Calculate radius squared (x^2 + y^2)
+    radius_squared = X[:, 0]**2 + X[:, 1]**2
+    y = (radius_squared < 0.49).long()
     
     return X, y
 
 if __name__ == "__main__":
-    X, y = generate_toy_data(num_samples=5)
-    print("Sample Sequences (X):\n", X)
-    print("Sample Targets (y):\n", y)
+    X, y = generate_2d_data(5)
+    print("Coordinates (X):\n", X)
+    print("Targets (y):\n", y)

@@ -1,54 +1,89 @@
+# quantum_embedding.py
 import torch
 import torch.nn as nn
-from qiskit import QuantumCircuit
-from qiskit.circuit.library import zz_feature_map, real_amplitudes
-from qiskit.quantum_info import SparsePauliOp
-from qiskit_machine_learning.neural_networks import EstimatorQNN
-from qiskit_machine_learning.connectors import TorchConnector
+import pennylane as qml
+import numpy as np
+import pymatching
+from tqdm import tqdm
 
-class HybridQuantumEmbedding(nn.Module):
-    def __init__(self, classical_dim=128, num_qubits=4):
+# 17 qubits: 0-8 Data, 9-16 Ancilla
+dev = qml.device("default.qubit", wires=17)
+
+# 1. Define the Parity Check Matrix for a d=3 surface code
+# (8 syndrome measurements for 9 data qubits)
+# 1. Define the Parity Check Matrix for the 1D Repetition Circuit
+# (Matches the CNOT ladder in ft_qml_circuit perfectly)
+H = np.array([
+    [1, 1, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 0, 0, 0, 0, 0, 0],
+    [0, 0, 1, 1, 0, 0, 0, 0, 0],
+    [0, 0, 0, 1, 1, 0, 0, 0, 0],
+    [0, 0, 0, 0, 1, 1, 0, 0, 0],
+    [0, 0, 0, 0, 0, 1, 1, 0, 0],
+    [0, 0, 0, 0, 0, 0, 1, 1, 0],
+    [0, 0, 0, 0, 0, 0, 0, 1, 1],
+], dtype=np.uint8)
+
+matching = pymatching.Matching.from_check_matrix(H)
+
+# 2. Generate the 256-item MWPM Lookup Table
+print("Generating MWPM Lookup Table...")
+mwpm_cache = []
+for i in range(256):
+    # Convert integer [0-255] into an 8-bit array
+    syndrome = np.array([(i >> j) & 1 for j in range(8)], dtype=np.uint8)
+    
+    # Run the MWPM algorithm to get the 9-bit correction array
+    correction = matching.decode(syndrome)
+    mwpm_cache.append(correction.tolist())
+print("Lookup Table Generated Successfully.\n")
+
+# 3. Define the physical correction applicator
+def apply_physical_corrections(correction_bits):
+    for data_idx in range(9):
+        if correction_bits[data_idx] == 1:
+            qml.PauliX(wires=data_idx)
+
+@qml.qnode(dev, interface="torch", diff_method="parameter-shift")
+def ft_qml_circuit(inputs, weights):
+    # Data Encoding
+    for i in range(9):
+        qml.RY(inputs[0] * np.pi, wires=i)
+        qml.RZ(inputs[1] * np.pi, wires=i)
+    
+    # Trainable AI Layer
+    for i in range(9):
+        qml.RX(weights[i], wires=i)
+    
+    # Mid-Circuit Syndrome Extraction
+    measurements = []
+    for ancilla_idx in range(9, 17):
+        data_idx = ancilla_idx - 9
+        qml.CNOT(wires=[data_idx, ancilla_idx]) 
+        qml.CNOT(wires=[data_idx + 1, ancilla_idx])
+        
+        m = qml.measure(ancilla_idx)
+        measurements.append(m)
+        
+    # Calculate the integer index of the syndrome [0-255]
+    syndrome_int = sum(m * (2**j) for j, m in enumerate(measurements))
+
+    # Apply the pre-calculated MWPM correction via PennyLane's conditional tape
+    for val in range(256):
+        qml.cond(syndrome_int == val, apply_physical_corrections)(mwpm_cache[val])
+        
+    # Logical Measurement
+    return qml.expval(qml.PauliZ(0) @ qml.PauliZ(1) @ qml.PauliZ(2))
+
+class FTQuantumEmbedding(nn.Module):
+    def __init__(self):
         super().__init__()
+        self.weights = nn.Parameter(torch.randn(9, requires_grad=True))
         
-        self.fc_in = nn.Linear(classical_dim, num_qubits)
-        self.qnn = self._build_quantum_layer(num_qubits)
-        self.quantum_layer = TorchConnector(self.qnn)
-        self.fc_out = nn.Linear(num_qubits, classical_dim)
-
-    def _build_quantum_layer(self, num_qubits):
-        # Use the modern Qiskit 2.x functional API
-        feature_map = zz_feature_map(num_qubits, reps=1)
-        ansatz = real_amplitudes(num_qubits, reps=1)
-        
-        qc = QuantumCircuit(num_qubits)
-        qc.compose(feature_map, inplace=True)
-        qc.compose(ansatz, inplace=True)
-        
-        # Define an observable for each individual qubit (Z0, Z1, Z2, Z3)
-        observables = [
-            SparsePauliOp.from_sparse_list([("Z", [i], 1)], num_qubits=num_qubits) 
-            for i in range(num_qubits)
-        ]
-        
-        return EstimatorQNN(
-            circuit=qc,
-            observables=observables,
-            input_params=feature_map.parameters,
-            weight_params=ansatz.parameters
-        )
-
     def forward(self, x):
-        x = torch.relu(self.fc_in(x))
-        x = self.quantum_layer(x)
-        x = self.fc_out(x)
-        return x
-
-if __name__ == "__main__":
-    dummy_llm_vector = torch.rand((1, 128))
-    print("Classical Input Shape:", dummy_llm_vector.shape)
-    
-    model = HybridQuantumEmbedding(classical_dim=128, num_qubits=4)
-    output = model(dummy_llm_vector)
-    
-    print("Quantum-Processed Output Shape:", output.shape)
-    print("The PyTorch autograd engine is automatically tracking the quantum gates.")
+        batch_outputs = []
+        for sample in tqdm(x, desc="Evaluating Quantum Circuits", leave=False):
+            out = ft_qml_circuit(sample, self.weights)
+            batch_outputs.append(out)
+        
+        return torch.stack(batch_outputs).unsqueeze(1)
