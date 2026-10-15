@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset, Subset
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from ft_classifier import FTQuantumClassifier
@@ -16,19 +16,17 @@ def load_qec_data():
     return TensorDataset(X, y)
 
 def main():
-    print("[TRAIN] Entering main")
+    print("[TRAIN] Entering main()...")
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[TRAIN] Hardware assigned: {device}")
 
+    # --- RESTORED FULL DATASET ---
     full_dataset = load_qec_data()
-    
-    # Dry run limit
-    train_dataset = Subset(full_dataset, range(16))
-    print(f"[TRAIN] Dataset {len(train_dataset)} samples for testing.")
+    print(f"[TRAIN] Using full dataset with {len(full_dataset)} samples.")
 
     dataloader = DataLoader(
-        train_dataset, 
+        full_dataset, 
         batch_size=4,       
         shuffle=True, 
         num_workers=0,      
@@ -36,15 +34,14 @@ def main():
     )
     print(f"[TRAIN] DataLoader initialized with {len(dataloader)} batches.")
 
-    print("[TRAIN] Moving model to device")
+    print("[TRAIN] Moving model to device...")
     model = FTQuantumClassifier().to(device)
     
-    # Applied the CrossEntropyLoss fix here
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.05)
-    print("[TRAIN] Optimizer and Loss Function")
+    print("[TRAIN] Optimizer and Loss Function ready.")
 
-    epochs = 1
+    epochs = 5
     for epoch in range(epochs):
         print(f"\n[EPOCH {epoch+1}] Starting epoch")
         model.train()
@@ -52,7 +49,6 @@ def main():
         for batch_idx, (X_batch, y_batch) in enumerate(dataloader):
             print(f"\n  [BATCH {batch_idx+1}] Moving data to device")
             X_batch = X_batch.to(device)
-            # Applied the .long() cast fix here
             y_batch = y_batch.to(device).long()
             
             print(f"  [BATCH {batch_idx+1}] Zeroing gradients")
@@ -71,7 +67,7 @@ def main():
             print(f"  [BATCH {batch_idx+1}] Stepping Optimizer")
             optimizer.step()
             
-            print(f"  [BATCH {batch_idx+1}] Batch complete.")
+            print(f"  [BATCH {batch_idx+1}] Batch complete")
             
         print(f"[EPOCH {epoch+1}] Epoch complete.\n")
 

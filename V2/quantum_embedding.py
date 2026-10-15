@@ -5,7 +5,7 @@ from pennylane import qjit
 import numpy as np
 import jax.numpy as jnp
 
-print("[INIT] Loading quantum_embedding.py")
+print("[INIT] Loading quantum_embedding")
 
 # Target the RTX 3060 backend
 dev = qml.device("lightning.gpu", wires=17, shots=1000)
@@ -44,6 +44,7 @@ def ft_qml_circuit(inputs, weights):
     print("  -> [JIT COMPILE] Tracing: Calculating syndrome integer")
     syndrome_int = sum(m * (2**j) for j, m in enumerate(measurements))
     
+    # --- RESTORED 256-BRANCH MWPM LOOP ---
     print("  -> [JIT COMPILE] Tracing: Starting 256-branch MWPM conditional loop")
     for val in range(256):
         print(f"  -> [JIT COMPILE] Tracing: Evaluating MWPM branch {val}/255")
