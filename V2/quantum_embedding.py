@@ -8,7 +8,7 @@ import jax.numpy as jnp
 print("[INIT] Loading quantum_embedding")
 
 # Target the RTX 3060 backend
-dev = qml.device("lightning.gpu", wires=17, shots=1000)
+dev = qml.device("lightning.qubit", wires=17, shots=1000)
 print(f"[INIT] PennyLane device initialized: {dev.name}")
 
 # Dummy MWPM cache for the dry run (replace with your actual lookup table generation)
